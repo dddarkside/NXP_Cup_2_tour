@@ -59,7 +59,7 @@ extern "C"
 #define EDGE_RIGHT_ZONE					45
 
 #define MOTOR_DUTY_FORWARD 0.5f
-#DEFINE START_SPEED 0.75f
+#define START_SPEED 0.75f
 #define MOTOR_DUTY_STOP     0.0f
 #define MOTOR_DUTY_SMOOTHLY 0.5f
 #define MOTOR_DUTY_SHARPLY  0.5f
@@ -183,7 +183,7 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])
 		{
 			was_the_left_line_found = true;
 			road_edges[0] = i;
-			break
+			break;
 		}
 		i++;
 	}
@@ -194,7 +194,7 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])
 		{
 			was_the_right_line_found = true;
 			road_edges[1] = j;
-			break
+			break;
 		}
 		j--;
 	}
@@ -498,3 +498,4 @@ int main(void)
 
 	return (0);
 }
+
