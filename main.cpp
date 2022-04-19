@@ -29,7 +29,7 @@ extern "C"
 
 #define PIXY_WIDTH     	315
 #define PIXY_HEIGHT    	207
-#define PIXY_ROW_NB    	50
+#define PIXY_ROW_NB    	100
 #define PIXY_COL_START 	3
 #define PIXY_COL_STEP  	5
 
@@ -45,63 +45,50 @@ extern "C"
 
 #define BRIGHTNESS_BUFF_SIZE	62
 
-#define MAX_LINE_WIDTH			12
+#define MAX_LINE_WIDTH			10
 
-#define THRESHOLD_LEFT_HIGH_TWO_LINE	15
-#define THRESHOLD_LEFT_LOW_TWO_LINE		28
-#define THRESHOLD_RIGHT_LOW_TWO_LINE	34
-#define THRESHOLD_RIGHT_HIGH_TWO_LINE	47
+#define THRESHOLD_LEFT_HIGH_TWO_LINE	16
+#define THRESHOLD_LEFT_LOW_TWO_LINE		21
+#define THRESHOLD_RIGHT_LOW_TWO_LINE	42
+#define THRESHOLD_RIGHT_HIGH_TWO_LINE	45
 
-#define THRESHOLD_ERR_LOW_ONE_LINE		7
-#define THRESHOLD_ERR_HIGH_ONE_LINE		15
+#define THRESHOLD_ERR_LOW_ONE_LINE		3
+#define THRESHOLD_ERR_HIGH_ONE_LINE		6
 
 #define EDGE_LEFT_ZONE					16
 #define EDGE_RIGHT_ZONE					45
 
-#define MOTOR_DUTY_FORWARD 0.5f
-#define START_SPEED 0.75f
+#define MOTOR_DUTY_FORWARD  0.6f
 #define MOTOR_DUTY_STOP     0.0f
 #define MOTOR_DUTY_SMOOTHLY 0.5f
+#define SERVO_DUTY_LEFT_ONE 0.5f
 #define MOTOR_DUTY_SHARPLY  0.5f
 
 #define SERVO_DUTY_FORWARD  		0.0f
 #define SERVO_DUTY_STOP     		0.0f
-#define SERVO_DUTY_LEFT_SMOOTHLY 	0.3f
-#define SERVO_DUTY_LEFT_HALF_SHARPLY 0.7f
+#define SERVO_DUTY_LEFT_SMOOTHLY 	0.5f
+#define SERVO_DUTY_LEFT_ONE         0.7f
 #define SERVO_DUTY_LEFT_SHARPLY  	1.0f
-#define SERVO_DUTY_RIGHT_SMOOTHLY 	-0.3f
-#define SERVO_DUTY_RIGHT_HALF_SHARPLY -0.7f
+#define SERVO_DUTY_RIGHT_SMOOTHLY 	-0.5f
+#define SERVO_DUTY_RIGHT_ONE        -0.7f
 #define SERVO_DUTY_RIGHT_SHARPLY  	-1.0f
 
 #define SERVO_PORT_1	0
 #define SERVO_PORT_2	1
 
-#define STOP_TIME 20
-
-uint8_t timer = 0;
-
 enum state
 {
 	LEFT_SMOOTHLY,
-	LEFT_HALF_SHARPLY,
+	LEFT_ONE,
 	LEFT_SHARPLY,
 
 	RIGHT_SMOOTHLY,
-	RIGHT_HALF_SHARPLY,
 	RIGHT_SHARPLY,
 
 	FORWARD,
 	STOP
 };
 
-enum last_line
-{
-	RIGHT,
-	RIGHT_EDGE,
-	LEFT,
-	LEFT_EDGE,
-	BOTH
-};
 
 void setup_mk()
 {
@@ -159,7 +146,7 @@ void setup_mk()
 		mRs232_Open();
 }
 
-void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy)
+void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy)//Яркость
 {
 	uint8_t r, g, b;
 
@@ -170,7 +157,7 @@ void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy)
 	}
 }
 
-void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])
+void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найти края
 {
 	uint8_t i = 0;
 	uint8_t j = BRIGHTNESS_BUFF_SIZE - 1;
@@ -204,158 +191,37 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])
 	// Возможные проблемы: Если препятствие оставляет очень маленькую область свободной, но такого вроде не будет
 	if (was_the_right_line_found==false)
 	{
-		road_edges[1] = PIXY_MID_X;
+		road_edges[1] = 63;
 	}
 	if (was_the_left_line_found==false)
 	{
-		road_edges[0] = PIXY_MID_X;
+		road_edges[0] = -1;
 	}
 }
 
-int get_lines_count(uint8_t road_edges[], uint8_t brightness_buff[])
+enum state choosing_state(uint8_t road_edges[])
 {
-	uint8_t left_x = road_edges[0];
-	uint8_t right_x = road_edges[1];
-
-	if (left_x > right_x)
-		return (0);
-	else
-	{
-		while (left_x < right_x)
-		{
-			// Проверка на то, что камера действительно зафиксировала две линии, а не края одной
-			if (brightness_buff[left_x] > BLACK_BRIGHTNESS_ERR)
-				return (2);
-			left_x++;
-		}
-		return (1);
-	}
+	if (road_edges[0] < 13 && road_edges[1]>49)return FORWARD;
+	else if (road_edges[0] == -1 && road_edges[1]>49)return RIGHT_SMOOTHLY;
+	else if (road_edges[0] == -1 && road_edges[1]<=49)return RIGHT_SHARPLY;
+	else if (road_edges[0] < 13 && road_edges[1] == 63)return LEFT_SMOOTHLY;
+	else if (road_edges[0] >= 13 && road_edges[1] == 63)return LEFT_SHARPLY;
+	else return FORWARD;
 }
 
-enum last_line get_last_line(uint8_t mid_point, uint8_t line_count, enum last_line last_line)
-{
-	if (line_count == 2)
-		return (BOTH);
-	else if (line_count == 1 && (last_line == BOTH || last_line == LEFT_EDGE || last_line == RIGHT_EDGE))
-	{
-		if (mid_point <= EDGE_LEFT_ZONE)
-			return (LEFT_EDGE);
-		else if (mid_point < PIXY_MID_X)
-			return (LEFT);
-		else if (mid_point >= EDGE_RIGHT_ZONE)
-			return (RIGHT_EDGE);
-		else
-			return (RIGHT);
-	}
-	else if (line_count == 1 && last_line == LEFT && mid_point <= EDGE_LEFT_ZONE)
-		return (LEFT_EDGE);
-	else if (line_count == 1 && last_line == RIGHT && mid_point >= EDGE_RIGHT_ZONE)
-			return (RIGHT_EDGE);
-	else
-		return (last_line);
-}
-
-enum state get_state_by_two_lines(uint8_t mid_point)
-{
-	if (mid_point < THRESHOLD_LEFT_HIGH_TWO_LINE)
-		return (LEFT_SHARPLY);
-	else if (mid_point >= THRESHOLD_LEFT_HIGH_TWO_LINE && mid_point <= THRESHOLD_LEFT_LOW_TWO_LINE)
-		return (LEFT_SMOOTHLY);
-	else if (mid_point > THRESHOLD_RIGHT_HIGH_TWO_LINE)
-		return (RIGHT_SHARPLY);
-	else if (mid_point >= THRESHOLD_RIGHT_LOW_TWO_LINE && mid_point <= THRESHOLD_RIGHT_HIGH_TWO_LINE)
-		return (RIGHT_SMOOTHLY);
-	else
-		return (FORWARD);
-}
-
-enum state get_state_by_one_line(uint8_t mid_point, uint8_t standart_line_x)
-{
-	if (mid_point < standart_line_x - THRESHOLD_ERR_HIGH_ONE_LINE)
-		return (LEFT_SHARPLY);
-	else if (mid_point >= standart_line_x - THRESHOLD_ERR_HIGH_ONE_LINE
-			&& mid_point <= standart_line_x - THRESHOLD_ERR_LOW_ONE_LINE)
-		return (LEFT_SMOOTHLY);
-	else if (mid_point > standart_line_x + THRESHOLD_ERR_HIGH_ONE_LINE)
-		return (RIGHT_SHARPLY);
-	else if (mid_point >= standart_line_x + THRESHOLD_ERR_LOW_ONE_LINE
-			&& mid_point <= standart_line_x + THRESHOLD_ERR_HIGH_ONE_LINE)
-		return (RIGHT_SMOOTHLY);
-	else
-		return (FORWARD);
-}
-
-// Возвращает true, если была зафиксирована одна, но широкая черная линия,
-// или если между двумя черными линиями (краями дороги) была найдена еще одна
-bool is_stop_line
-(
-	uint8_t brightness_buff[],
-	uint8_t left_line_x,
-	uint8_t right_line_x,
-	uint8_t line_count
-)
-{
-	uint8_t i = left_line_x;
-
-	if (line_count == 1)
-	{
-		if (right_line_x - left_line_x > MAX_LINE_WIDTH)
-			return (true);
-		else
-			return (false);
-	}
-
-	// Пропускаем черные пиксели левой линии дороги
-	while (brightness_buff[i] <= BLACK_BRIGHTNESS_ERR && i < right_line_x)
-		i++;
-
-	if (i - left_line_x > MAX_LINE_WIDTH)
-		return (true);
-
-	// Пропускаем белые пиксели, пока не наткнемся на линию
-	while (brightness_buff[i] > BLACK_BRIGHTNESS_ERR && i < right_line_x)
-		i++;
-
-	if (right_line_x - i > MAX_LINE_WIDTH)
-		return (true);
-
-	return (false);
-}
-
-enum state get_state_by_lines
-(
-		uint8_t mid_point,
-		enum last_line last_line,
-		const uint8_t &left_line_x,
-		const uint8_t &right_line_x
-)
-{
-	if (last_line == LEFT || last_line == LEFT_EDGE)
-		return (get_state_by_one_line(mid_point, left_line_x));
-	else if (last_line == RIGHT || last_line == RIGHT_EDGE)
-		return (get_state_by_one_line(mid_point, right_line_x));
-	else
-		return (get_state_by_two_lines(mid_point));
-}
-
-void handle_state(enum state state)
+void handle_state(enum state state)//////////////////////////////////////////////////////
 {
 	switch (state)
 	{
 	case FORWARD:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_FORWARD);
-		if (timer>20) mTimer_SetMotorDuty(-START_SPEED, START_SPEED);
-		else mTimer_SetMotorDuty(-MOTOR_DUTY_FORWARD, MOTOR_DUTY_FORWARD);
+		mTimer_SetMotorDuty(-MOTOR_DUTY_FORWARD, MOTOR_DUTY_FORWARD);
 		break;
 	case STOP:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_STOP);
 		mTimer_SetMotorDuty(-MOTOR_DUTY_STOP, MOTOR_DUTY_STOP);
 		break;
 	case LEFT_SMOOTHLY:
-		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_LEFT_SMOOTHLY);
-		mTimer_SetMotorDuty(-MOTOR_DUTY_SMOOTHLY, MOTOR_DUTY_SMOOTHLY);
-		break;
-	case RIGHT_HALF_SHARPLY:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_LEFT_SMOOTHLY);
 		mTimer_SetMotorDuty(-MOTOR_DUTY_SMOOTHLY, MOTOR_DUTY_SMOOTHLY);
 		break;
@@ -367,10 +233,6 @@ void handle_state(enum state state)
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_RIGHT_SMOOTHLY);
 		mTimer_SetMotorDuty(-MOTOR_DUTY_SMOOTHLY, MOTOR_DUTY_SMOOTHLY);
 		break;
-	case LEFT_HALF_SHARPLY:
-		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_LEFT_SMOOTHLY);
-		mTimer_SetMotorDuty(-MOTOR_DUTY_SMOOTHLY, MOTOR_DUTY_SMOOTHLY);
-		break;
 	case RIGHT_SHARPLY:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_RIGHT_SHARPLY);
 		mTimer_SetMotorDuty(-MOTOR_DUTY_SHARPLY, MOTOR_DUTY_SHARPLY);
@@ -378,58 +240,15 @@ void handle_state(enum state state)
 	}
 }
 
-void print_brightness_buff(uint8_t brightness_buff[])
-{
-	for (int i = 0; i < BRIGHTNESS_BUFF_SIZE; i++)
-	{
-		printf("%d ", brightness_buff[i]);
-	}
-	printf("\n----------------------------------------------------\n");
-}
 
-void print_road_edges(uint8_t road_edges[])
-{
-	printf("%d %d\n", road_edges[0], road_edges[1]);
-}
-
-void print_mid_point(uint8_t mid_point, uint8_t line_count)
-{
-	printf("x: %d\tline_cnt: %d\n", mid_point, line_count);
-}
-
-void print_state(enum state state, uint8_t line_count, uint8_t mid_point)
-{
-	char *state_str;
-
-	if (state == LEFT_SMOOTHLY)
-		state_str = "LEFT_SMOOTHLY";
-	else if (state == LEFT_SHARPLY)
-		state_str = "LEFT_SHARPLY";
-	else if (state == RIGHT_SMOOTHLY)
-		state_str = "RIGHT_SMOOTHLY";
-	else if (state == RIGHT_SHARPLY)
-		state_str = "RIGHT_SHARPLY";
-	else if (state == FORWARD)
-		state_str = "FORWARD";
-	else
-		state_str = "STOP";
-	printf("State: %s,\tline count: %d,\t%d\n", state_str, line_count, mid_point);
-}
 
 int main(void)
 {
-	bool			is_runing = false;
+	bool is_runing = false;
+	enum state state = FORWARD;
 
-	uint8_t			brightness_buff[BRIGHTNESS_BUFF_SIZE];
-	uint8_t			road_edges[2];
-	uint8_t			mid_point;
-	uint8_t			line_count;
-
-	enum state 		state = STOP;
-	enum last_line	last_line = BOTH;
-
-	const uint8_t left_line_standart_x = 0;
-	const uint8_t right_line_standart_x = 0;
+	uint8_t	brightness_buff[BRIGHTNESS_BUFF_SIZE];
+	uint8_t	road_edges[2];
 
 	setup_mk();
 
@@ -442,54 +261,21 @@ int main(void)
 
 	while (true)
 	{
-		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW2))
+		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW1))
 			is_runing = true;
 
-		// Режим конфигурации камеры по краям дороги
-		if (mSwitch_ReadSwitch(kSw1) && !mSwitch_ReadSwitch(kSw4))
-		{
-			while (mSwitch_ReadSwitch(kSw1))
-			{
-				fill_brightness_buff(brightness_buff, pixy);
-				fill_road_edges(road_edges, brightness_buff);
-				line_count = get_lines_count(road_edges, brightness_buff);
-				mid_point = (road_edges[0] + road_edges[1]) / 2;
-
-				if (line_count == 2 && mid_point >= PIXY_MID_X - PIXY_MID_ERR && mid_point <= PIXY_MID_X + PIXY_MID_ERR)
-					mLeds_Write(kMaskLed2, kLedOff);		// Потухшая лампочка говорит, что конфигурация выполнена и можно переключаться в режим работы
-				else
-					mLeds_Write(kMaskLed2, kLedOn);
-			}
-
-			const_cast<uint8_t&>(left_line_standart_x) = road_edges[0];
-			const_cast<uint8_t&>(right_line_standart_x) = road_edges[1];
-		}
 		// Режим работы
 		else if (mSwitch_ReadSwitch(kSw4) && !mSwitch_ReadSwitch(kSw1) && is_runing)
 		{
 			fill_brightness_buff(brightness_buff, pixy);
 			fill_road_edges(road_edges, brightness_buff);
-			line_count = get_lines_count(road_edges, brightness_buff);
-			mid_point = (road_edges[0] + road_edges[1]) / 2;
-			last_line = get_last_line(mid_point, line_count, last_line);
 
 			//print_brightness_buff(brightness_buff);
 			//print_road_edges(road_edges);
 			//print_mid_point(mid_point, line_count);
 
-			if (is_stop_line(brightness_buff, road_edges[0], road_edges[1], line_count))
-			{
-				mTimer_SetMotorDuty(MOTOR_DUTY_SHARPLY, -MOTOR_DUTY_SHARPLY);
-				usleep(50000);
-				is_runing = false;
-				state = STOP;
-				last_line = BOTH;
-			}
-			else
-				state = get_state_by_lines(mid_point, last_line, left_line_standart_x, right_line_standart_x);
+			state = choosing_state(road_edges);
 		}
-		else
-			state = STOP;
 
 		//print_state(state, line_count, mid_point);
 
@@ -498,4 +284,3 @@ int main(void)
 
 	return (0);
 }
-
