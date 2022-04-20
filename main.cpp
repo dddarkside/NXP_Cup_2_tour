@@ -1,29 +1,4 @@
-extern "C"
-{
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-#include "board.h"
-#include "peripherals.h"
-#include "pin_mux.h"
-#include "clock_config.h"
-#include "MK64F12.h"
-#include "fsl_debug_console.h"
-
-#include "Modules/mSpi.h"
-#include "Modules/mDac.h"
-#include "Modules/mAccelMagneto.h"
-#include "Modules/mGyro.h"
-#include "Modules/mTimer.h"
-#include "Modules/mCpu.h"
-#include "Modules/mSwitch.h"
-#include "Modules/mLeds.h"
-#include "Modules/mAd.h"
-#include "Modules/mDelay.h"
-#include "Modules/mRS232.h"
-#include "Modules/mVL6180x.h"
-}
+#include "def.h"
 
 #include "Pixy/Pixy2SPI_SS.h"
 
@@ -47,39 +22,26 @@ extern "C"
 
 #define MAX_LINE_WIDTH			10
 
-#define THRESHOLD_LEFT_HIGH_TWO_LINE	16
-#define THRESHOLD_LEFT_LOW_TWO_LINE		21
-#define THRESHOLD_RIGHT_LOW_TWO_LINE	42
-#define THRESHOLD_RIGHT_HIGH_TWO_LINE	45
-
-#define THRESHOLD_ERR_LOW_ONE_LINE		3
-#define THRESHOLD_ERR_HIGH_ONE_LINE		6
-
-#define EDGE_LEFT_ZONE					16
-#define EDGE_RIGHT_ZONE					45
-
 #define MOTOR_DUTY_FORWARD  0.6f
-#define MOTOR_DUTY_STOP     0.0f
 #define MOTOR_DUTY_SMOOTHLY 0.5f
 #define SERVO_DUTY_LEFT_ONE 0.5f
 #define MOTOR_DUTY_SHARPLY  0.5f
 
 #define SERVO_DUTY_FORWARD  		0.0f
-#define SERVO_DUTY_STOP     		0.0f
 #define SERVO_DUTY_LEFT_SMOOTHLY 	0.5f
-#define SERVO_DUTY_LEFT_ONE         0.7f
 #define SERVO_DUTY_LEFT_SHARPLY  	1.0f
 #define SERVO_DUTY_RIGHT_SMOOTHLY 	-0.5f
-#define SERVO_DUTY_RIGHT_ONE        -0.7f
 #define SERVO_DUTY_RIGHT_SHARPLY  	-1.0f
 
 #define SERVO_PORT_1	0
 #define SERVO_PORT_2	1
 
+#define LEFT_WHEEL 13
+#define RIGHT_WHEEL 49
+
 enum state
 {
 	LEFT_SMOOTHLY,
-	LEFT_ONE,
 	LEFT_SHARPLY,
 
 	RIGHT_SMOOTHLY,
@@ -88,63 +50,6 @@ enum state
 	FORWARD,
 	STOP
 };
-
-
-void setup_mk()
-{
-	//--------------------------------------------------------------------
-		// Device and card setup
-		//--------------------------------------------------------------------
-		// PLL Config --> CPU 100MHz, bus and periph 50MH z
-		mCpu_Setup();
-
-		// Config and start switches and pushers
-		mSwitch_Setup();
-		mSwitch_Open();
-
-		// Config and start of LEDs
-		mLeds_Setup();
-		mLeds_Open();
-
-		// Config and start of ADC
-		mAd_Setup();
-		mAd_Open();
-
-		// Config and start of SPI
-		mSpi_Setup();
-		mSpi_Open();
-
-		// Config and start non-blocking delay by PIT
-		mDelay_Setup();
-		mDelay_Open();
-
-		// Timer Config for Speed Measurement and PWM Outputs for Servos
-		mTimer_Setup();
-		mTimer_Open();
-
-		// Setup FXOS8700CQ
-		mAccelMagneto_Setup();
-		mAccelMagneto_Open();
-
-		// Setup FXAS21002C
-		mGyro_Setup();
-		mGyro_Open();
-
-		// Config and start of the DAC0 used to drive the driver LED lighting
-		mDac_Setup();
-		mDac_Open();
-
-		// Setup and start of motor and servo PWM controls and speed measurement
-		mTimer_Setup();
-		mTimer_Open();
-
-		// Enable IRQ at the CPU -> Primask
-		__enable_irq();
-
-		// UART 4 monitoring image
-		mRs232_Setup();
-		mRs232_Open();
-}
 
 void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy)//Яркость
 {
@@ -201,12 +106,22 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 
 enum state choosing_state(uint8_t road_edges[])
 {
-	if (road_edges[0] < 13 && road_edges[1]>49)return FORWARD;
-	else if (road_edges[0] == -1 && road_edges[1]>49)return RIGHT_SMOOTHLY;
-	else if (road_edges[0] == -1 && road_edges[1]<=49)return RIGHT_SHARPLY;
-	else if (road_edges[0] < 13 && road_edges[1] == 63)return LEFT_SMOOTHLY;
-	else if (road_edges[0] >= 13 && road_edges[1] == 63)return LEFT_SHARPLY;
-	else return FORWARD;
+	if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии
+	{
+		uint8_t mid = (road_edges[0]+road_edges[1]/2);
+
+		if (mid == BRIGHTNESS_BUFF_SIZE/2 || mid == (BRIGHTNESS_BUFF_SIZE/2)+1)return FORWARD;
+		else if (mid < BRIGHTNESS_BUFF_SIZE/2)return LEFT_SMOOTHLY;
+		else return RIGHT_SMOOTHLY;
+
+	}
+	else if (road_edges[0] == -1 && (road_edges[1] > RIGHT_WHEEL && road_edges[1] < RIGHT_WHEEL+3))return FORWARD;
+	else if (road_edges[0] == -1 && road_edges[1] < RIGHT_WHEEL)return RIGHT_SHARPLY ;
+	else if (road_edges[0] == -1 && road_edges[1] > RIGHT_WHEEL+3)return LEFT_SMOOTHLY ;
+
+	else if ((road_edges[0] < LEFT_WHEEL && road_edges[0] > LEFT_WHEEL-3) && road_edges[1] == 63)return FORWARD;
+	else if (road_edges[0] < LEFT_WHEEL-3 && road_edges[1] == 63)return RIGHT_SMOOTHLY;
+	else return LEFT_SHARPLY;// if (road_edges[0] > LEFT_WHEEL && road_edges[1] == 63)
 }
 
 void handle_state(enum state state)//////////////////////////////////////////////////////
@@ -216,10 +131,6 @@ void handle_state(enum state state)/////////////////////////////////////////////
 	case FORWARD:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_FORWARD);
 		mTimer_SetMotorDuty(-MOTOR_DUTY_FORWARD, MOTOR_DUTY_FORWARD);
-		break;
-	case STOP:
-		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_STOP);
-		mTimer_SetMotorDuty(-MOTOR_DUTY_STOP, MOTOR_DUTY_STOP);
 		break;
 	case LEFT_SMOOTHLY:
 		mTimer_SetServoDuty(SERVO_PORT_1, SERVO_DUTY_LEFT_SMOOTHLY);
@@ -256,9 +167,6 @@ int main(void)
 	pixy.init();
 	//pixy.setLamp(1, 1);
 
-	// Горящая дампочка говорит, что ты не сконфигурировал камеру по краям дороги
-	mLeds_Write(kMaskLed2, kLedOn);
-
 	while (true)
 	{
 		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW1))
@@ -267,8 +175,8 @@ int main(void)
 		// Режим работы
 		else if (mSwitch_ReadSwitch(kSw4) && !mSwitch_ReadSwitch(kSw1) && is_runing)
 		{
-			fill_brightness_buff(brightness_buff, pixy);
-			fill_road_edges(road_edges, brightness_buff);
+			fill_brightness_buff(brightness_buff, pixy);//собираем значения яркости
+			fill_road_edges(road_edges, brightness_buff);//находим линии
 
 			//print_brightness_buff(brightness_buff);
 			//print_road_edges(road_edges);
