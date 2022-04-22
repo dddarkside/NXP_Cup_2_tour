@@ -36,8 +36,8 @@
 #define SERVO_PORT_1	0
 #define SERVO_PORT_2	1
 
-#define LEFT_WHEEL 13
-#define RIGHT_WHEEL 49
+//#define WHEELS[0] 13
+//#define WHEELS[1] 49
 
 enum state
 {
@@ -104,14 +104,14 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 	}
 }
 
-enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[])
+enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[],uint8_t* WHEELS)
 {
 	if(road_edges[0] >-1 && road_edges[1] < 63 && (road_edges_2[0] >-1 ^ road_edges_2[1] < 63))//cube
 	{
 		if (road_edges_2[0] == -1)return RIGHT_SMOOTHLY;
 		else return LEFT_SMOOTHLY;
 	}
-	
+
 	else if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии и куба нет
 	{
 		uint8_t mid = (road_edges[0]+road_edges[1]/2);
@@ -122,14 +122,14 @@ enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[])
 
 	}
 
-	
-	else if (road_edges[0] == -1 && (road_edges[1] > RIGHT_WHEEL && road_edges[1] < RIGHT_WHEEL+3))return FORWARD;//только правая линия
-	else if (road_edges[0] == -1 && road_edges[1] < RIGHT_WHEEL)return LEFT_SHARPLY ;
-	else if (road_edges[0] == -1 && road_edges[1] > RIGHT_WHEEL+3)return LEFT_SMOOTHLY ;
 
-	else if ((road_edges[0] < LEFT_WHEEL && road_edges[0] > LEFT_WHEEL-3) && road_edges[1] == 63)return FORWARD;//только левая линия
-	else if (road_edges[0] < LEFT_WHEEL-3 && road_edges[1] == 63)return RIGHT_SMOOTHLY;
-	else return RIGHT_SHARPLY;// if (road_edges[0] > LEFT_WHEEL && road_edges[1] == 63)
+	else if (road_edges[0] == -1 && (road_edges[1] > WHEELS[1] && road_edges[1] < WHEELS[1]+3))return FORWARD;//только правая линия
+	else if (road_edges[0] == -1 && road_edges[1] < WHEELS[1])return LEFT_SHARPLY ;
+	else if (road_edges[0] == -1 && road_edges[1] > WHEELS[1]+3)return LEFT_SMOOTHLY ;
+
+	else if ((road_edges[0] < WHEELS[0] && road_edges[0] > WHEELS[0]-3) && road_edges[1] == 63)return FORWARD;//только левая линия
+	else if (road_edges[0] < WHEELS[0]-3 && road_edges[1] == 63)return RIGHT_SMOOTHLY;
+	else return RIGHT_SHARPLY;// if (road_edges[0] > WHEELS[0] && road_edges[1] == 63)
 }
 
 void handle_state(enum state state)//////////////////////////////////////////////////////
@@ -159,25 +159,27 @@ void handle_state(enum state state)/////////////////////////////////////////////
 	}
 }
 
-int setting(uint8_t brightness_buff[], uint8_t brightness_buff_2[], Pixy2SPI_SS &pixy)
+uint8_t* setting(uint8_t* WHEELS ,uint8_t brightness_buff[], uint8_t brightness_buff_2[], Pixy2SPI_SS &pixy)
 {
-	uint8_t WHEELS[4];
+
+
 	fill_brightness_buff(brightness_buff, pixy, PIXY_ROW_NB);
 	fill_brightness_buff(brightness_buff_2, pixy,30);
-	
+
+	uint8_t i =0;
 	uint8_t key = 0;
-	for (uint8_t i : brightness_buff)
+	for (i=0; i < BRIGHTNESS_BUFF_SIZE; i++)
 	{
-		if (i < BLACK_BRIGHTNESS_ERR && key !=2)
+		if (brightness_buff[i] < BLACK_BRIGHTNESS_ERR && key !=2)
 		{
 			WHEELS[key] = i;
 			key++;
 		}
 	}
 	key = 2;
-	for (uint8_t i : brightness_buff_2)
+	for (i=0; i < BRIGHTNESS_BUFF_SIZE; i++)
 	{
-		if (i < BLACK_BRIGHTNESS_ERR && key !=4)
+		if (brightness_buff[i] < BLACK_BRIGHTNESS_ERR && key !=4)
 		{
 			WHEELS[key] = i;
 			key++;
@@ -191,8 +193,7 @@ int main(void)
 	bool is_runing = false;
 	enum state state = FORWARD;
 
-	uint8_t WHEELS[4];
-	
+
 	uint8_t	brightness_buff[BRIGHTNESS_BUFF_SIZE];
 	uint8_t	road_edges[2];
 	uint8_t brightness_buff_2[BRIGHTNESS_BUFF_SIZE];//ищем куб
@@ -203,10 +204,12 @@ int main(void)
 	Pixy2SPI_SS pixy;
 	pixy.init();
 	//pixy.setLamp(1, 1);
-	
-	
-	WHEELS = setting();
-	while(WHEELS[0] != 63 - WHEELS[1] || WHEELS[2] != 63 - WHEELS[3])WHEELS = setting();//Сделать лампочку
+
+
+	uint8_t mas[4];
+	uint8_t* WHEELS = &(mas[0]);
+	WHEELS = setting(WHEELS,brightness_buff, brightness_buff_2, pixy);
+	while(WHEELS[0] != 63 - WHEELS[1] || WHEELS[2] != 63 - WHEELS[3])WHEELS = setting(WHEELS, brightness_buff, brightness_buff_2, pixy);//Сделать лампочку
 	while (true)
 	{
 		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW1))
@@ -224,7 +227,7 @@ int main(void)
 			//print_road_edges(road_edges);
 			//print_mid_point(mid_point, line_count);
 
-			state = choosing_state(road_edges , road_edges_2);
+			state = choosing_state(road_edges , road_edges_2, WHEELS);
 		}
 
 		//print_state(state, line_count, mid_point);
