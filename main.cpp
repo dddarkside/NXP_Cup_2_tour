@@ -4,7 +4,7 @@
 
 #define PIXY_WIDTH     	315
 #define PIXY_HEIGHT    	207
-#define PIXY_ROW_NB    	100
+#define PIXY_ROW_NB    	207
 #define PIXY_COL_START 	3
 #define PIXY_COL_STEP  	5
 
@@ -96,7 +96,7 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 	// Возможные проблемы: Если препятствие оставляет очень маленькую область свободной, но такого вроде не будет
 	if (was_the_right_line_found==false)
 	{
-		road_edges[1] = 63;
+		road_edges[1] = BRIGHTNESS_BUFF_SIZE+1;
 	}
 	if (was_the_left_line_found==false)
 	{
@@ -106,13 +106,13 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 
 enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[],uint8_t* WHEELS)
 {
-	if(road_edges[0] >-1 && road_edges[1] < 63 && (road_edges_2[0] >-1 ^ road_edges_2[1] < 63))//cube
+	if(road_edges[0] >-1 && road_edges[1] < BRIGHTNESS_BUFF_SIZE+1 && (road_edges_2[0] >-1 ^ road_edges_2[1] < BRIGHTNESS_BUFF_SIZE+1))//cube
 	{
 		if (road_edges_2[0] == -1)return RIGHT_SMOOTHLY;
 		else return LEFT_SMOOTHLY;
 	}
 
-	else if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии и куба нет
+	else if (road_edges[0] >-1 && road_edges[1] < BRIGHTNESS_BUFF_SIZE+1 )//Две линии и куба нет
 	{
 		uint8_t mid = (road_edges[0]+road_edges[1]/2);
 
@@ -127,8 +127,8 @@ enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[],uint8_t* 
 	else if (road_edges[0] == -1 && road_edges[1] < WHEELS[1])return LEFT_SHARPLY ;
 	else if (road_edges[0] == -1 && road_edges[1] > WHEELS[1]+3)return LEFT_SMOOTHLY ;
 
-	else if ((road_edges[0] < WHEELS[0] && road_edges[0] > WHEELS[0]-3) && road_edges[1] == 63)return FORWARD;//только левая линия
-	else if (road_edges[0] < WHEELS[0]-3 && road_edges[1] == 63)return RIGHT_SMOOTHLY;
+	else if ((road_edges[0] < WHEELS[0] && road_edges[0] > WHEELS[0]-3) && road_edges[1] == BRIGHTNESS_BUFF_SIZE+1)return FORWARD;//только левая линия
+	else if (road_edges[0] < WHEELS[0]-3 && road_edges[1] == BRIGHTNESS_BUFF_SIZE+1)return RIGHT_SMOOTHLY;
 	else return RIGHT_SHARPLY;// if (road_edges[0] > WHEELS[0] && road_edges[1] == 63)
 }
 
@@ -209,7 +209,7 @@ int main(void)
 	uint8_t mas[4];
 	uint8_t* WHEELS = &(mas[0]);
 	WHEELS = setting(WHEELS,brightness_buff, brightness_buff_2, pixy);
-	while(WHEELS[0] != 63 - WHEELS[1] || WHEELS[2] != 63 - WHEELS[3])WHEELS = setting(WHEELS, brightness_buff, brightness_buff_2, pixy);//Сделать лампочку
+	while(WHEELS[0] != BRIGHTNESS_BUFF_SIZE+1 - WHEELS[1] || WHEELS[2] != BRIGHTNESS_BUFF_SIZE+1 - WHEELS[3])WHEELS = setting(WHEELS, brightness_buff, brightness_buff_2, pixy);//Сделать лампочку
 	while (true)
 	{
 		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW1))
@@ -220,12 +220,8 @@ int main(void)
 		{
 			fill_brightness_buff(brightness_buff, pixy, PIXY_ROW_NB);//собираем значения яркости
 			fill_road_edges(road_edges, brightness_buff);//находим линии
-			fill_brightness_buff( brightness_buff_2, pixy,30);//чекаем куб
+			fill_brightness_buff( brightness_buff_2, pixy,50);//чекаем куб
 			fill_road_edges(road_edges_2, brightness_buff);//чекаем куб
-
-			//print_brightness_buff(brightness_buff);
-			//print_road_edges(road_edges);
-			//print_mid_point(mid_point, line_count);
 
 			state = choosing_state(road_edges , road_edges_2, WHEELS);
 		}
@@ -237,3 +233,4 @@ int main(void)
 
 	return (0);
 }
+
