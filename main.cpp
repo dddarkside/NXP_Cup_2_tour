@@ -159,13 +159,40 @@ void handle_state(enum state state)/////////////////////////////////////////////
 	}
 }
 
-
+int setting(uint8_t brightness_buff[], uint8_t brightness_buff_2[], Pixy2SPI_SS &pixy)
+{
+	uint8_t WHEELS[4];
+	fill_brightness_buff(brightness_buff, pixy, PIXY_ROW_NB);
+	fill_brightness_buff(brightness_buff_2, pixy,30);
+	
+	uint8_t key = 0;
+	for (uint8_t i : brightness_buff)
+	{
+		if (i < BLACK_BRIGHTNESS_ERR && key !=2)
+		{
+			WHEELS[key] = i;
+			key++;
+		}
+	}
+	key = 2;
+	for (uint8_t i : brightness_buff_2)
+	{
+		if (i < BLACK_BRIGHTNESS_ERR && key !=4)
+		{
+			WHEELS[key] = i;
+			key++;
+		}
+	}
+	return WHEELS;
+}
 
 int main(void)
 {
 	bool is_runing = false;
 	enum state state = FORWARD;
 
+	uint8_t WHEELS[4];
+	
 	uint8_t	brightness_buff[BRIGHTNESS_BUFF_SIZE];
 	uint8_t	road_edges[2];
 	uint8_t brightness_buff_2[BRIGHTNESS_BUFF_SIZE];//ищем куб
@@ -176,7 +203,10 @@ int main(void)
 	Pixy2SPI_SS pixy;
 	pixy.init();
 	//pixy.setLamp(1, 1);
-
+	
+	
+	WHEELS = setting();
+	while(WHEELS[0] != 63 - WHEELS[1] || WHEELS[2] != 63 - WHEELS[3])WHEELS = setting();//Сделать лампочку
 	while (true)
 	{
 		if (!mSwitch_ReadSwitch(kSw1) && mSwitch_ReadSwitch(kSw4) && mSwitch_ReadPushBut(kPushButSW1))
