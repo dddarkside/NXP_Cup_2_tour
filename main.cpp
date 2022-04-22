@@ -104,7 +104,7 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 	}
 }
 
-enum state choosing_state(uint8_t road_edges[])
+enum state choosing_state(uint8_t road_edges[],enum state last_one)
 {
 	if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии
 	{
@@ -115,13 +115,13 @@ enum state choosing_state(uint8_t road_edges[])
 		else return RIGHT_SMOOTHLY;
 
 	}
-	else if (road_edges[0] == -1 && (road_edges[1] > RIGHT_WHEEL && road_edges[1] < RIGHT_WHEEL+3))return FORWARD;
-	else if (road_edges[0] == -1 && road_edges[1] < RIGHT_WHEEL)return RIGHT_SHARPLY ;
+	else if (road_edges[0] == -1 && (road_edges[1] > RIGHT_WHEEL && road_edges[1] < RIGHT_WHEEL+3))return FORWARD;//только правая линия
+	else if (road_edges[0] == -1 && road_edges[1] < RIGHT_WHEEL)return LEFT_SHARPLY ;
 	else if (road_edges[0] == -1 && road_edges[1] > RIGHT_WHEEL+3)return LEFT_SMOOTHLY ;
 
-	else if ((road_edges[0] < LEFT_WHEEL && road_edges[0] > LEFT_WHEEL-3) && road_edges[1] == 63)return FORWARD;
+	else if ((road_edges[0] < LEFT_WHEEL && road_edges[0] > LEFT_WHEEL-3) && road_edges[1] == 63)return FORWARD;//только левая линия
 	else if (road_edges[0] < LEFT_WHEEL-3 && road_edges[1] == 63)return RIGHT_SMOOTHLY;
-	else return LEFT_SHARPLY;// if (road_edges[0] > LEFT_WHEEL && road_edges[1] == 63)
+	else return RIGHT_SHARPLY;// if (road_edges[0] > LEFT_WHEEL && road_edges[1] == 63)
 }
 
 void handle_state(enum state state)//////////////////////////////////////////////////////
@@ -157,6 +157,7 @@ int main(void)
 {
 	bool is_runing = false;
 	enum state state = FORWARD;
+	enum state last_one = state;
 
 	uint8_t	brightness_buff[BRIGHTNESS_BUFF_SIZE];
 	uint8_t	road_edges[2];
