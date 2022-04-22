@@ -51,13 +51,13 @@ enum state
 	STOP
 };
 
-void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy)//Яркость
+void fill_brightness_buff(uint8_t brightness_buff[], Pixy2SPI_SS &pixy, uint8_t height)//Яркость
 {
 	uint8_t r, g, b;
 
 	for (int i = 0; i < BRIGHTNESS_BUFF_SIZE; i++)
 	{
-		pixy.video.getRGB(PIXY_COL_START + PIXY_COL_STEP * i, PIXY_ROW_NB, &r, &g, &b, false);
+		pixy.video.getRGB(PIXY_COL_START + PIXY_COL_STEP * i, height , &r, &g, &b, false);
 		brightness_buff[i] = (r * RED_W + g * GREEN_W + b * BLUE_W) / 3;
 	}
 }
@@ -104,9 +104,15 @@ void fill_road_edges(uint8_t road_edges[], uint8_t brightness_buff[])//Найт�
 	}
 }
 
-enum state choosing_state(uint8_t road_edges[],enum state last_one)
+enum state choosing_state(uint8_t road_edges[], uint8_t road_edges_2[])
 {
-	if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии
+	if(road_edges[0] >-1 && road_edges[1] < 63 && (road_edges_2[0] >-1 ^ road_edges_2[1] < 63))//cube
+	{
+		if (road_edges_2[0] == -1)return RIGHT_SMOOTHLY;
+		else return LEFT_SMOOTHLY;
+	}
+	
+	else if (road_edges[0] >-1 && road_edges[1] < 63 )//Две линии и куба нет
 	{
 		uint8_t mid = (road_edges[0]+road_edges[1]/2);
 
@@ -115,6 +121,8 @@ enum state choosing_state(uint8_t road_edges[],enum state last_one)
 		else return RIGHT_SMOOTHLY;
 
 	}
+
+	
 	else if (road_edges[0] == -1 && (road_edges[1] > RIGHT_WHEEL && road_edges[1] < RIGHT_WHEEL+3))return FORWARD;//только правая линия
 	else if (road_edges[0] == -1 && road_edges[1] < RIGHT_WHEEL)return LEFT_SHARPLY ;
 	else if (road_edges[0] == -1 && road_edges[1] > RIGHT_WHEEL+3)return LEFT_SMOOTHLY ;
@@ -157,10 +165,11 @@ int main(void)
 {
 	bool is_runing = false;
 	enum state state = FORWARD;
-	enum state last_one = state;
 
 	uint8_t	brightness_buff[BRIGHTNESS_BUFF_SIZE];
 	uint8_t	road_edges[2];
+	uint8_t brightness_buff_2[BRIGHTNESS_BUFF_SIZE];//ищем куб
+	uint8_t	road_edges_2[2];//ищем куб
 
 	setup_mk();
 
@@ -176,14 +185,16 @@ int main(void)
 		// Режим работы
 		else if (mSwitch_ReadSwitch(kSw4) && !mSwitch_ReadSwitch(kSw1) && is_runing)
 		{
-			fill_brightness_buff(brightness_buff, pixy);//собираем значения яркости
+			fill_brightness_buff(brightness_buff, pixy, PIXY_ROW_NB);//собираем значения яркости
 			fill_road_edges(road_edges, brightness_buff);//находим линии
+			fill_brightness_buff( brightness_buff_2, pixy,30);//чекаем куб
+			fill_road_edges(road_edges_2, brightness_buff);//чекаем куб
 
 			//print_brightness_buff(brightness_buff);
 			//print_road_edges(road_edges);
 			//print_mid_point(mid_point, line_count);
 
-			state = choosing_state(road_edges);
+			state = choosing_state(road_edges , road_edges_2);
 		}
 
 		//print_state(state, line_count, mid_point);
